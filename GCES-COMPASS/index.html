@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Virtual Compass</title>
+<title>Digital Compass</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -21,6 +21,12 @@ body {
     text-align: center;
 }
 
+h1 {
+    margin-bottom: 14px;
+    font-size: 1.6rem;
+    font-weight: 600;
+}
+
 .compass {
     position: relative;
     width: 280px;
@@ -28,42 +34,43 @@ body {
     border-radius: 50%;
     border: 8px solid #444;
     background: radial-gradient(circle, #222 60%, #000 100%);
-    margin-bottom: 20px;
+    margin-bottom: 18px;
 }
 
 .rose {
     position: absolute;
     inset: 0;
     border-radius: 50%;
+    transition: transform 0.15s linear;
 }
 
 .tick {
     position: absolute;
+    left: 50%;
+    top: 12px;
     width: 2px;
     background: #666;
-    top: 10px;
-    left: 50%;
-    transform-origin: center 130px;
-}
-
-.tick.major {
-    height: 18px;
-    background: #aaa;
+    transform-origin: center 128px;
 }
 
 .tick.minor {
-    height: 10px;
+    height: 8px;
+}
+
+.tick.major {
+    height: 16px;
+    background: #aaa;
 }
 
 .label {
     position: absolute;
-    width: 40px;
-    text-align: center;
     left: 50%;
-    top: 14px;
-    transform-origin: center 126px;
+    top: 18px;
+    transform-origin: center 122px;
+    transform: translateX(-50%);
     font-size: 0.9rem;
     color: #ddd;
+    white-space: nowrap;
 }
 
 .label.major {
@@ -82,14 +89,15 @@ body {
     background: red;
     top: 20px;
     left: 50%;
-    transform-origin: bottom center;
     transform: translateX(-50%);
+    transform-origin: bottom center;
     border-radius: 2px;
     z-index: 5;
 }
 
 .readout {
     font-size: 1.4rem;
+    margin-top: 4px;
 }
 
 .degrees {
@@ -118,9 +126,11 @@ button {
 
 <body>
 <div class="container">
+    <h1>Digital Compass</h1>
+
     <div class="compass">
         <div class="rose" id="rose"></div>
-        <div class="needle" id="needle"></div>
+        <div class="needle"></div>
     </div>
 
     <div class="readout" id="direction">--</div>
@@ -135,7 +145,6 @@ let currentHeading = 0;
 let calibrationOffset = 0;
 
 const rose = document.getElementById("rose");
-const needle = document.getElementById("needle");
 const directionEl = document.getElementById("direction");
 const degreesEl = document.getElementById("degrees");
 const statusEl = document.getElementById("status");
@@ -146,34 +155,30 @@ function getDirection(deg) {
 }
 
 function buildCompassRose() {
-    // Ticks every 5°
-    for (let i = 0; i < 360; i += 5) {
+    // Tick marks every 5°
+    for (let d = 0; d < 360; d += 5) {
         const tick = document.createElement("div");
-        tick.classList.add("tick");
-
-        if (i % 30 === 0) tick.classList.add("major");
-        else tick.classList.add("minor");
-
-        tick.style.transform = `rotate(${i}deg) translateX(-50%)`;
+        tick.className = "tick " + (d % 30 === 0 ? "major" : "minor");
+        tick.style.transform = `rotate(${d}deg)`;
         rose.appendChild(tick);
     }
 
-    // Cardinal & intercardinal labels
+    // Cardinal / intercardinal labels
     const labels = [
-        { d: 0, t: "N", c: "major north" },
-        { d: 45, t: "NE" },
-        { d: 90, t: "E", c: "major" },
+        { d: 0,   t: "N",  c: "major north" },
+        { d: 45,  t: "NE" },
+        { d: 90,  t: "E",  c: "major" },
         { d: 135, t: "SE" },
-        { d: 180, t: "S", c: "major" },
+        { d: 180, t: "S",  c: "major" },
         { d: 225, t: "SW" },
-        { d: 270, t: "W", c: "major" },
+        { d: 270, t: "W",  c: "major" },
         { d: 315, t: "NW" }
     ];
 
     labels.forEach(l => {
         const label = document.createElement("div");
         label.className = `label ${l.c || ""}`;
-        label.style.transform = `rotate(${l.d}deg) translateX(-50%)`;
+        label.style.transform = `translateX(-50%) rotate(${l.d}deg)`;
         label.textContent = l.t;
         rose.appendChild(label);
     });
@@ -182,7 +187,7 @@ function buildCompassRose() {
 function updateCompass(heading) {
     const adjusted = (heading + calibrationOffset + 360) % 360;
 
-    needle.style.transform = `translateX(-50%) rotate(${adjusted}deg)`;
+    // Rotate rose only — needle stays upright
     rose.style.transform = `rotate(${-adjusted}deg)`;
 
     directionEl.textContent = getDirection(adjusted);
@@ -205,8 +210,8 @@ function handleOrientation(e) {
 
 async function initSensors() {
     if (typeof DeviceOrientationEvent?.requestPermission === "function") {
-        const p = await DeviceOrientationEvent.requestPermission();
-        if (p === "granted") {
+        const permission = await DeviceOrientationEvent.requestPermission();
+        if (permission === "granted") {
             window.addEventListener("deviceorientation", handleOrientation, true);
             statusEl.textContent = "Permission granted";
         } else {
