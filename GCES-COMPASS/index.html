@@ -22,19 +22,31 @@ body {
 }
 
 h1 {
-    margin-bottom: 14px;
+    margin-bottom: 12px;
     font-size: 1.6rem;
+}
+
+.mode {
+    font-size: 0.9rem;
+    opacity: 0.7;
+    margin-bottom: 8px;
 }
 
 .compass {
     position: relative;
-    width: 280px;
-    height: 280px;
+    width: 300px;
+    height: 300px;
     border-radius: 50%;
     border: 8px solid #444;
     background: radial-gradient(circle, #222 60%, #000 100%);
     margin-bottom: 18px;
     overflow: hidden;
+    transition: width 0.2s, height 0.2s;
+}
+
+.compass.laptop {
+    width: 240px;
+    height: 240px;
 }
 
 .rose {
@@ -50,7 +62,11 @@ h1 {
     top: 12px;
     width: 2px;
     background: #666;
-    transform-origin: center 128px;
+    transform-origin: center 138px;
+}
+
+.compass.laptop .tick {
+    transform-origin: center 108px;
 }
 
 .tick.minor { height: 8px; }
@@ -60,11 +76,16 @@ h1 {
     position: absolute;
     left: 50%;
     top: 18px;
-    transform-origin: center 122px;
+    transform-origin: center 132px;
     transform: translateX(-50%);
     font-size: 0.9rem;
     color: #ddd;
     white-space: nowrap;
+}
+
+.compass.laptop .label {
+    transform-origin: center 102px;
+    font-size: 0.8rem;
 }
 
 .label.major { font-weight: bold; color: #fff; }
@@ -73,7 +94,7 @@ h1 {
 .needle {
     position: absolute;
     width: 4px;
-    height: 120px;
+    height: 130px;
     background: red;
     top: 20px;
     left: 50%;
@@ -82,17 +103,32 @@ h1 {
     z-index: 5;
 }
 
-.readout { font-size: 1.4rem; }
-.degrees { font-size: 1.1rem; opacity: 0.8; }
+.compass.laptop .needle {
+    height: 100px;
+}
+
+.readout {
+    font-size: 1.4rem;
+}
+
+.degrees {
+    font-size: 1.1rem;
+    opacity: 0.8;
+}
+
+.controls {
+    margin-top: 10px;
+}
 
 button {
-    margin-top: 14px;
+    margin: 6px;
     padding: 10px 18px;
     font-size: 1rem;
     border: none;
     border-radius: 6px;
     background: #2d7cff;
     color: #fff;
+    cursor: pointer;
 }
 
 .status {
@@ -106,8 +142,9 @@ button {
 <body>
 <div class="container">
     <h1>Digital Compass</h1>
+    <div class="mode" id="modeLabel">Mode: Tablet</div>
 
-    <div class="compass">
+    <div class="compass" id="compass">
         <div class="rose" id="rose"></div>
         <div class="needle"></div>
     </div>
@@ -115,36 +152,29 @@ button {
     <div class="readout" id="direction">--</div>
     <div class="degrees" id="degrees">--°</div>
 
-    <button id="calibrate">North (Calibrate)</button>
+    <div class="controls">
+        <button id="calibrate">North (Calibrate)</button>
+        <button id="toggleMode">Switch to Laptop Mode</button>
+    </div>
+
     <div class="status" id="status">Waiting for sensor…</div>
 </div>
 
 <script>
+let mode = "tablet";
 let currentHeading = 0;
 let calibrationOffset = 0;
 
-// Smooth rotation state
 let lastAngle = 0;
 let smoothAngle = 0;
 
-// Tablet / orientation mode
-let flipRotation = false;
-
+const compassEl = document.getElementById("compass");
 const rose = document.getElementById("rose");
 const directionEl = document.getElementById("direction");
 const degreesEl = document.getElementById("degrees");
 const statusEl = document.getElementById("status");
-
-function isTabletMode() {
-    return window.innerWidth > window.innerHeight;
-}
-
-function updateRotationMode() {
-    flipRotation = isTabletMode();
-}
-
-window.addEventListener("resize", updateRotationMode);
-window.addEventListener("orientationchange", updateRotationMode);
+const modeLabel = document.getElementById("modeLabel");
+const toggleBtn = document.getElementById("toggleMode");
 
 function getDirection(deg) {
     const dirs = ["N","NE","E","SE","S","SW","W","NW"];
@@ -152,6 +182,8 @@ function getDirection(deg) {
 }
 
 function buildCompassRose() {
+    rose.innerHTML = "";
+
     for (let d = 0; d < 360; d += 5) {
         const tick = document.createElement("div");
         tick.className = "tick " + (d % 30 === 0 ? "major" : "minor");
@@ -189,16 +221,16 @@ function updateCompass(heading) {
     smoothAngle += delta;
     lastAngle = adjusted;
 
-    const directionMultiplier = flipRotation ? 1 : -1;
-    rose.style.transform = `rotate(${directionMultiplier * smoothAngle}deg)`;
+    rose.style.transform = `rotate(${-smoothAngle}deg)`;
 
     directionEl.textContent = getDirection(adjusted);
     degreesEl.textContent = `${Math.round(adjusted)}°`;
 }
 
 function handleOrientation(e) {
-    let heading;
+    if (mode !== "tablet") return;
 
+    let heading;
     if (e.webkitCompassHeading !== undefined) {
         heading = e.webkitCompassHeading;
     } else if (e.alpha !== null) {
@@ -207,19 +239,30 @@ function handleOrientation(e) {
 
     currentHeading = heading;
     updateCompass(heading);
-    statusEl.textContent = flipRotation ? "Sensor active (tablet mode)" : "Sensor active";
+    statusEl.textContent = "Sensor active";
+}
+
+function handleMouse(e) {
+    if (mode !== "laptop") return;
+
+    const percent = e.clientX / window.innerWidth;
+    currentHeading = percent * 360;
+    updateCompass(currentHeading);
+    statusEl.textContent = "Mouse input active";
 }
 
 async function initSensors() {
-    updateRotationMode();
-
     if (typeof DeviceOrientationEvent?.requestPermission === "function") {
-        const p = await DeviceOrientationEvent.requestPermission();
-        if (p === "granted") {
-            window.addEventListener("deviceorientation", handleOrientation, true);
-            statusEl.textContent = "Permission granted";
-        } else {
-            statusEl.textContent = "Permission denied";
+        try {
+            const p = await DeviceOrientationEvent.requestPermission();
+            if (p === "granted") {
+                window.addEventListener("deviceorientation", handleOrientation, true);
+                statusEl.textContent = "Sensor permission granted";
+            } else {
+                statusEl.textContent = "Sensor permission denied";
+            }
+        } catch {
+            statusEl.textContent = "Sensor error";
         }
     } else {
         window.addEventListener("deviceorientationabsolute", handleOrientation, true);
@@ -233,6 +276,23 @@ document.getElementById("calibrate").onclick = () => {
     lastAngle = 0;
     smoothAngle = 0;
 };
+
+toggleBtn.onclick = () => {
+    mode = mode === "tablet" ? "laptop" : "tablet";
+
+    compassEl.classList.toggle("laptop", mode === "laptop");
+    modeLabel.textContent = `Mode: ${mode === "tablet" ? "Tablet" : "Laptop"}`;
+    toggleBtn.textContent = `Switch to ${mode === "tablet" ? "Laptop" : "Tablet"} Mode`;
+
+    lastAngle = 0;
+    smoothAngle = 0;
+
+    statusEl.textContent = mode === "tablet"
+        ? "Using device sensors"
+        : "Using mouse input";
+};
+
+window.addEventListener("mousemove", handleMouse);
 
 buildCompassRose();
 initSensors();
