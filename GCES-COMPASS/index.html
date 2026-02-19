@@ -117,8 +117,6 @@ button {
     <div class="degrees" id="degrees">--°</div>
 
     <button id="calibrate">North (Calibrate)</button>
-    <br>
-    <button id="modeToggle">Mode: Laptop</button>
 
     <div class="status" id="status">Waiting for sensor…</div>
 </div>
@@ -138,7 +136,6 @@ const rose = document.getElementById("rose");
 const directionEl = document.getElementById("direction");
 const degreesEl = document.getElementById("degrees");
 const statusEl = document.getElementById("status");
-const modeBtn = document.getElementById("modeToggle");
 
 function getDirection(deg) {
     const dirs = ["N","NE","E","SE","S","SW","W","NW"];
@@ -192,6 +189,7 @@ function updateCompass(heading) {
 function handleOrientation(e) {
     let heading;
 
+    // Determine heading
     if (e.webkitCompassHeading !== undefined) {
         heading = e.webkitCompassHeading;
     } else if (e.alpha !== null) {
@@ -199,6 +197,13 @@ function handleOrientation(e) {
     } else return;
 
     currentHeading = heading;
+
+    // Auto switch rotation if device is upside down
+    // beta ~ 180 when upside down, ~0 when flat/normal
+    if (e.beta !== null) {
+        rotationDirection = (Math.abs(e.beta) > 90) ? -1 : 1;
+    }
+
     updateCompass(heading);
     statusEl.textContent = "Sensor active";
 }
@@ -223,13 +228,6 @@ document.getElementById("calibrate").onclick = () => {
     calibrationOffset = -currentHeading;
     lastAngle = 0;
     smoothAngle = 0;
-};
-
-modeBtn.onclick = () => {
-    rotationDirection *= -1;
-    modeBtn.textContent = rotationDirection === 1
-        ? "Mode: Laptop"
-        : "Mode: Tablet";
 };
 
 buildCompassRose();
