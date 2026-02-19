@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>3D Tilt-Compensated Compass</title>
+<title>Digital Compass</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -17,8 +17,14 @@ body {
     height: 100vh;
 }
 
-.container { text-align: center; }
-h1 { margin-bottom: 14px; font-size: 1.6rem; }
+.container {
+    text-align: center;
+}
+
+h1 {
+    margin-bottom: 14px;
+    font-size: 1.6rem;
+}
 
 .compass {
     position: relative;
@@ -35,7 +41,7 @@ h1 { margin-bottom: 14px; font-size: 1.6rem; }
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    transition: transform 0.1s linear;
+    transition: transform 0.12s linear;
 }
 
 .tick {
@@ -46,6 +52,7 @@ h1 { margin-bottom: 14px; font-size: 1.6rem; }
     background: #666;
     transform-origin: center 128px;
 }
+
 .tick.minor { height: 8px; }
 .tick.major { height: 16px; background: #aaa; }
 
@@ -59,6 +66,7 @@ h1 { margin-bottom: 14px; font-size: 1.6rem; }
     color: #ddd;
     white-space: nowrap;
 }
+
 .label.major { font-weight: bold; color: #fff; }
 .label.north { color: #f44; }
 
@@ -88,13 +96,17 @@ button {
     cursor: pointer;
 }
 
-.status { margin-top: 8px; font-size: 0.85rem; opacity: 0.6; }
+.status {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    opacity: 0.6;
+}
 </style>
 </head>
 
 <body>
 <div class="container">
-    <h1>3D Compass</h1>
+    <h1>Digital Compass</h1>
 
     <div class="compass">
         <div class="rose" id="rose"></div>
@@ -105,11 +117,15 @@ button {
     <div class="degrees" id="degrees">--°</div>
 
     <button id="calibrate">North (Calibrate)</button>
-    <div class="status" id="status">Waiting for sensors…</div>
+
+    <div class="status" id="status">Waiting for sensor…</div>
 </div>
 
 <script>
+let currentHeading = 0;
 let calibrationOffset = 0;
+
+// Smooth rotation state
 let lastAngle = 0;
 let smoothAngle = 0;
 
@@ -120,6 +136,11 @@ const rose = document.getElementById("rose");
 const directionEl = document.getElementById("direction");
 const degreesEl = document.getElementById("degrees");
 const statusEl = document.getElementById("status");
+
+function getDirection(deg) {
+    const dirs = ["N","NE","E","SE","S","SW","W","NW"];
+    return dirs[Math.round(deg / 45) % 8];
+}
 
 function buildCompassRose() {
     for (let d = 0; d < 360; d += 5) {
@@ -149,58 +170,79 @@ function buildCompassRose() {
     });
 }
 
-function getDirectionName(deg) {
-    const dirs = ["N","NE","E","SE","S","SW","W","NW"];
-    return dirs[Math.round(deg / 45) % 8];
-}
-
 function updateCompass(heading) {
     const adjusted = (heading + calibrationOffset + 360) % 360;
 
     let delta = adjusted - lastAngle;
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;
+
     smoothAngle += delta;
     lastAngle = adjusted;
 
     rose.style.transform = `rotate(${-smoothAngle * rotationDirection}deg)`;
-    directionEl.textContent = getDirectionName(adjusted);
+
+    directionEl.textContent = getDirection(adjusted);
     degreesEl.textContent = `${Math.round(adjusted)}°`;
 }
 
-// Tilt-compensated heading from accelerometer
-function computeHeading(accel) {
-    const { x, y, z } = accel;
-    if (x === 0 && y === 0) return null; // can't compute
+function handleOrientation(e) {
+    let heading;
 
-    // Tilt-compensated heading
-    let heading = Math.atan2(y, x) * (180 / Math.PI);
-    heading = (heading + 360) % 360;
-    return heading;
+    if (e.webkitCompassHeading !== undefined) {
+        heading = e.webkitCompassHeading;
+    } else if (e.alpha !== null) {
+        heading = 360 - e.alpha;
+    } else return;
+
+    currentHeading = heading;
+
+    // Detect upside down using beta/gamma angles
+    if (e.beta !== null && e.gamma !== null) {
+        // rough estimate: device flipped if beta < -150 or > 150
+        if (Math.abs(e.beta) > 150 || Math.abs(e.gamma) > 150) {
+            rotationDirection = -1; // tablet mode
+        } else {
+            rotationDirection = 1;  // laptop mode
+        }
+    }
+
+    updateCompass(heading);
+    statusEl.textContent = "Sensor active";
 }
 
-// DeviceMotionEvent
-window.addEventListener("devicemotion", e => {
-    const acc = e.accelerationIncludingGravity;
-    if (!acc) return;
+async function initSensors() {
+    if (typeof DeviceOrientationEvent?.requestPermission === "function") {
+        const p = await DeviceOrientationEvent.requestPermission();
+        if (p === "granted") {
+            window.addEventListener("deviceorientation", handleOrientation, true);
+            statusEl.textContent = "Permission granted";
+        } else {
+            statusEl.textContent = "Permission denied";
+        }
+    } else {
+        window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+        window.addEventListener("deviceorientation", handleOrientation, true);
+        statusEl.textContent = "Listening for sensor";
+    }
 
-    // Determine tablet/laptop mode using gravity
-    rotationDirection = acc.z < 0 ? -1 : 1;
+    // Fallback: accelerometer detection
+    window.addEventListener('devicemotion', e => {
+        const z = e.accelerationIncludingGravity?.z;
+        if (z !== null && Math.abs(z) > 5) { // threshold to ignore tiny vibrations
+            rotationDirection = z < 0 ? -1 : 1;
+        }
+    }, true);
+}
 
-    const heading = computeHeading(acc);
-    if (heading !== null) updateCompass(heading);
-
-    statusEl.textContent = "Sensors active";
-}, true);
-
-// Calibration button
 document.getElementById("calibrate").onclick = () => {
-    calibrationOffset = -lastAngle;
+    calibrationOffset = -currentHeading;
     lastAngle = 0;
     smoothAngle = 0;
 };
 
 buildCompassRose();
+initSensors();
 </script>
 </body>
 </html>
