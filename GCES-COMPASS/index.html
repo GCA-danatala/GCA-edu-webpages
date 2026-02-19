@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Virtual Compass</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+    body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #111;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+    }
+
+    .container {
+        text-align: center;
+    }
+
+    .compass {
+        width: 250px;
+        height: 250px;
+        border: 8px solid #444;
+        border-radius: 50%;
+        position: relative;
+        margin: 0 auto 20px;
+        background: radial-gradient(circle, #222 60%, #000 100%);
+    }
+
+    .needle {
+        position: absolute;
+        width: 4px;
+        height: 110px;
+        background: red;
+        top: 15px;
+        left: 50%;
+        transform-origin: bottom center;
+        transform: translateX(-50%) rotate(0deg);
+        border-radius: 2px;
+    }
+
+    .north-label {
+        position: absolute;
+        top: 5px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-weight: bold;
+        color: #f44;
+    }
+
+    .readout {
+        font-size: 1.4rem;
+        margin-bottom: 10px;
+    }
+
+    .degrees {
+        font-size: 1.1rem;
+        opacity: 0.85;
+    }
+
+    button {
+        margin-top: 15px;
+        padding: 10px 18px;
+        font-size: 1rem;
+        border: none;
+        border-radius: 6px;
+        background: #2d7cff;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    button:active {
+        transform: scale(0.97);
+    }
+
+    .status {
+        margin-top: 10px;
+        font-size: 0.85rem;
+        opacity: 0.7;
+    }
+</style>
+</head>
+
+<body>
+<div class="container">
+    <div class="compass">
+        <div class="north-label">N</div>
+        <div class="needle" id="needle"></div>
+    </div>
+
+    <div class="readout" id="direction">--</div>
+    <div class="degrees" id="degrees">--°</div>
+
+    <button id="calibrate">North (Calibrate)</button>
+    <div class="status" id="status">Waiting for sensor…</div>
+</div>
+
+<script>
+let currentHeading = 0;
+let calibrationOffset = 0;
+
+const needle = document.getElementById("needle");
+const directionEl = document.getElementById("direction");
+const degreesEl = document.getElementById("degrees");
+const statusEl = document.getElementById("status");
+
+function getDirection(deg) {
+    const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    return dirs[Math.round(deg / 45) % 8];
+}
+
+function updateCompass(heading) {
+    const adjusted = (heading + calibrationOffset + 360) % 360;
+    needle.style.transform = `translateX(-50%) rotate(${adjusted}deg)`;
+    directionEl.textContent = getDirection(adjusted);
+    degreesEl.textContent = `${Math.round(adjusted)}°`;
+}
+
+function handleOrientation(event) {
+    let heading;
+
+    // iOS (webkitCompassHeading)
+    if (event.webkitCompassHeading !== undefined) {
+        heading = event.webkitCompassHeading;
+    } 
+    // Android / others
+    else if (event.alpha !== null) {
+        heading = 360 - event.alpha;
+    } else {
+        return;
+    }
+
+    currentHeading = heading;
+    updateCompass(heading);
+    statusEl.textContent = "Sensor active";
+}
+
+async function initSensors() {
+    if (
+        typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function"
+    ) {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === "granted") {
+                window.addEventListener("deviceorientation", handleOrientation, true);
+                statusEl.textContent = "Permission granted";
+            } else {
+                statusEl.textContent = "Permission denied";
+            }
+        } catch (e) {
+            statusEl.textContent = "Sensor error";
+        }
+    } else {
+        window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+        window.addEventListener("deviceorientation", handleOrientation, true);
+        statusEl.textContent = "Listening for sensor";
+    }
+}
+
+document.getElementById("calibrate").addEventListener("click", () => {
+    calibrationOffset = -currentHeading;
+});
+
+initSensors();
+</script>
+</body>
+</html>
