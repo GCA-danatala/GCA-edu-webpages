@@ -189,7 +189,6 @@ function updateCompass(heading) {
 function handleOrientation(e) {
     let heading;
 
-    // Determine heading
     if (e.webkitCompassHeading !== undefined) {
         heading = e.webkitCompassHeading;
     } else if (e.alpha !== null) {
@@ -198,10 +197,14 @@ function handleOrientation(e) {
 
     currentHeading = heading;
 
-    // Auto switch rotation if device is upside down
-    // beta ~ 180 when upside down, ~0 when flat/normal
-    if (e.beta !== null) {
-        rotationDirection = (Math.abs(e.beta) > 90) ? -1 : 1;
+    // Detect upside down using beta/gamma angles
+    if (e.beta !== null && e.gamma !== null) {
+        // rough estimate: device flipped if beta < -150 or > 150
+        if (Math.abs(e.beta) > 150 || Math.abs(e.gamma) > 150) {
+            rotationDirection = -1; // tablet mode
+        } else {
+            rotationDirection = 1;  // laptop mode
+        }
     }
 
     updateCompass(heading);
@@ -222,6 +225,14 @@ async function initSensors() {
         window.addEventListener("deviceorientation", handleOrientation, true);
         statusEl.textContent = "Listening for sensor";
     }
+
+    // Fallback: accelerometer detection
+    window.addEventListener('devicemotion', e => {
+        const z = e.accelerationIncludingGravity?.z;
+        if (z !== null && Math.abs(z) > 5) { // threshold to ignore tiny vibrations
+            rotationDirection = z < 0 ? -1 : 1;
+        }
+    }, true);
 }
 
 document.getElementById("calibrate").onclick = () => {
