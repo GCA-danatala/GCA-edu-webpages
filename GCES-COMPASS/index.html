@@ -8,12 +8,12 @@
 <style>
 body {
     margin: 0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     background: #111;
     color: #fff;
+    font-family: system-ui, sans-serif;
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     height: 100vh;
 }
 
@@ -22,45 +22,46 @@ body {
 }
 
 .compass {
+    position: relative;
     width: 280px;
     height: 280px;
-    border: 8px solid #444;
     border-radius: 50%;
-    position: relative;
-    margin: 0 auto 20px;
+    border: 8px solid #444;
     background: radial-gradient(circle, #222 60%, #000 100%);
-    overflow: hidden;
+    margin-bottom: 20px;
 }
 
 .rose {
     position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    transform-origin: center;
+    inset: 0;
+    border-radius: 50%;
 }
 
 .tick {
     position: absolute;
-    top: 0;
-    left: 50%;
     width: 2px;
-    height: 10px;
     background: #666;
-    transform-origin: bottom center;
+    top: 10px;
+    left: 50%;
+    transform-origin: center 130px;
 }
 
 .tick.major {
-    height: 16px;
+    height: 18px;
     background: #aaa;
+}
+
+.tick.minor {
+    height: 10px;
 }
 
 .label {
     position: absolute;
-    top: 8px;
+    width: 40px;
+    text-align: center;
     left: 50%;
-    transform-origin: center 132px;
+    top: 14px;
+    transform-origin: center 126px;
     font-size: 0.9rem;
     color: #ddd;
 }
@@ -82,23 +83,22 @@ body {
     top: 20px;
     left: 50%;
     transform-origin: bottom center;
-    transform: translateX(-50%) rotate(0deg);
+    transform: translateX(-50%);
     border-radius: 2px;
     z-index: 5;
 }
 
 .readout {
     font-size: 1.4rem;
-    margin-bottom: 6px;
 }
 
 .degrees {
     font-size: 1.1rem;
-    opacity: 0.85;
+    opacity: 0.8;
 }
 
 button {
-    margin-top: 15px;
+    margin-top: 14px;
     padding: 10px 18px;
     font-size: 1rem;
     border: none;
@@ -108,14 +108,10 @@ button {
     cursor: pointer;
 }
 
-button:active {
-    transform: scale(0.97);
-}
-
 .status {
-    margin-top: 10px;
+    margin-top: 8px;
     font-size: 0.85rem;
-    opacity: 0.7;
+    opacity: 0.6;
 }
 </style>
 </head>
@@ -138,44 +134,47 @@ button:active {
 let currentHeading = 0;
 let calibrationOffset = 0;
 
-const needle = document.getElementById("needle");
 const rose = document.getElementById("rose");
+const needle = document.getElementById("needle");
 const directionEl = document.getElementById("direction");
 const degreesEl = document.getElementById("degrees");
 const statusEl = document.getElementById("status");
 
 function getDirection(deg) {
-    const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    const dirs = ["N","NE","E","SE","S","SW","W","NW"];
     return dirs[Math.round(deg / 45) % 8];
 }
 
 function buildCompassRose() {
-    // Ticks
+    // Ticks every 5°
     for (let i = 0; i < 360; i += 5) {
         const tick = document.createElement("div");
-        tick.className = "tick";
+        tick.classList.add("tick");
+
         if (i % 30 === 0) tick.classList.add("major");
-        tick.style.transform = `translateX(-50%) rotate(${i}deg)`;
+        else tick.classList.add("minor");
+
+        tick.style.transform = `rotate(${i}deg) translateX(-50%)`;
         rose.appendChild(tick);
     }
 
-    // Labels
+    // Cardinal & intercardinal labels
     const labels = [
-        { deg: 0, text: "N", cls: "major north" },
-        { deg: 45, text: "NE" },
-        { deg: 90, text: "E", cls: "major" },
-        { deg: 135, text: "SE" },
-        { deg: 180, text: "S", cls: "major" },
-        { deg: 225, text: "SW" },
-        { deg: 270, text: "W", cls: "major" },
-        { deg: 315, text: "NW" }
+        { d: 0, t: "N", c: "major north" },
+        { d: 45, t: "NE" },
+        { d: 90, t: "E", c: "major" },
+        { d: 135, t: "SE" },
+        { d: 180, t: "S", c: "major" },
+        { d: 225, t: "SW" },
+        { d: 270, t: "W", c: "major" },
+        { d: 315, t: "NW" }
     ];
 
     labels.forEach(l => {
         const label = document.createElement("div");
-        label.className = `label ${l.cls || ""}`;
-        label.style.transform = `rotate(${l.deg}deg)`;
-        label.textContent = l.text;
+        label.className = `label ${l.c || ""}`;
+        label.style.transform = `rotate(${l.d}deg) translateX(-50%)`;
+        label.textContent = l.t;
         rose.appendChild(label);
     });
 }
@@ -190,16 +189,14 @@ function updateCompass(heading) {
     degreesEl.textContent = `${Math.round(adjusted)}°`;
 }
 
-function handleOrientation(event) {
+function handleOrientation(e) {
     let heading;
 
-    if (event.webkitCompassHeading !== undefined) {
-        heading = event.webkitCompassHeading;
-    } else if (event.alpha !== null) {
-        heading = 360 - event.alpha;
-    } else {
-        return;
-    }
+    if (e.webkitCompassHeading !== undefined) {
+        heading = e.webkitCompassHeading;
+    } else if (e.alpha !== null) {
+        heading = 360 - e.alpha;
+    } else return;
 
     currentHeading = heading;
     updateCompass(heading);
@@ -207,20 +204,13 @@ function handleOrientation(event) {
 }
 
 async function initSensors() {
-    if (
-        typeof DeviceOrientationEvent !== "undefined" &&
-        typeof DeviceOrientationEvent.requestPermission === "function"
-    ) {
-        try {
-            const permission = await DeviceOrientationEvent.requestPermission();
-            if (permission === "granted") {
-                window.addEventListener("deviceorientation", handleOrientation, true);
-                statusEl.textContent = "Permission granted";
-            } else {
-                statusEl.textContent = "Permission denied";
-            }
-        } catch {
-            statusEl.textContent = "Sensor error";
+    if (typeof DeviceOrientationEvent?.requestPermission === "function") {
+        const p = await DeviceOrientationEvent.requestPermission();
+        if (p === "granted") {
+            window.addEventListener("deviceorientation", handleOrientation, true);
+            statusEl.textContent = "Permission granted";
+        } else {
+            statusEl.textContent = "Permission denied";
         }
     } else {
         window.addEventListener("deviceorientationabsolute", handleOrientation, true);
@@ -229,9 +219,9 @@ async function initSensors() {
     }
 }
 
-document.getElementById("calibrate").addEventListener("click", () => {
+document.getElementById("calibrate").onclick = () => {
     calibrationOffset = -currentHeading;
-});
+};
 
 buildCompassRose();
 initSensors();
