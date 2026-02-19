@@ -123,14 +123,28 @@ button {
 let currentHeading = 0;
 let calibrationOffset = 0;
 
-// NEW: tracking smooth rotation
+// Smooth rotation state
 let lastAngle = 0;
 let smoothAngle = 0;
+
+// Tablet / orientation mode
+let flipRotation = false;
 
 const rose = document.getElementById("rose");
 const directionEl = document.getElementById("direction");
 const degreesEl = document.getElementById("degrees");
 const statusEl = document.getElementById("status");
+
+function isTabletMode() {
+    return window.innerWidth > window.innerHeight;
+}
+
+function updateRotationMode() {
+    flipRotation = isTabletMode();
+}
+
+window.addEventListener("resize", updateRotationMode);
+window.addEventListener("orientationchange", updateRotationMode);
 
 function getDirection(deg) {
     const dirs = ["N","NE","E","SE","S","SW","W","NW"];
@@ -168,7 +182,6 @@ function buildCompassRose() {
 function updateCompass(heading) {
     const adjusted = (heading + calibrationOffset + 360) % 360;
 
-    // delta normalized to -180..180
     let delta = adjusted - lastAngle;
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;
@@ -176,7 +189,8 @@ function updateCompass(heading) {
     smoothAngle += delta;
     lastAngle = adjusted;
 
-    rose.style.transform = `rotate(${-smoothAngle}deg)`;
+    const directionMultiplier = flipRotation ? 1 : -1;
+    rose.style.transform = `rotate(${directionMultiplier * smoothAngle}deg)`;
 
     directionEl.textContent = getDirection(adjusted);
     degreesEl.textContent = `${Math.round(adjusted)}°`;
@@ -193,10 +207,12 @@ function handleOrientation(e) {
 
     currentHeading = heading;
     updateCompass(heading);
-    statusEl.textContent = "Sensor active";
+    statusEl.textContent = flipRotation ? "Sensor active (tablet mode)" : "Sensor active";
 }
 
 async function initSensors() {
+    updateRotationMode();
+
     if (typeof DeviceOrientationEvent?.requestPermission === "function") {
         const p = await DeviceOrientationEvent.requestPermission();
         if (p === "granted") {
