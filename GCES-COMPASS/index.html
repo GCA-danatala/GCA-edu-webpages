@@ -24,7 +24,6 @@ body {
 h1 {
     margin-bottom: 14px;
     font-size: 1.6rem;
-    font-weight: 600;
 }
 
 .compass {
@@ -35,13 +34,14 @@ h1 {
     border: 8px solid #444;
     background: radial-gradient(circle, #222 60%, #000 100%);
     margin-bottom: 18px;
+    overflow: hidden;
 }
 
 .rose {
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    transition: transform 0.15s linear;
+    transition: transform 0.12s linear;
 }
 
 .tick {
@@ -53,14 +53,8 @@ h1 {
     transform-origin: center 128px;
 }
 
-.tick.minor {
-    height: 8px;
-}
-
-.tick.major {
-    height: 16px;
-    background: #aaa;
-}
+.tick.minor { height: 8px; }
+.tick.major { height: 16px; background: #aaa; }
 
 .label {
     position: absolute;
@@ -73,14 +67,8 @@ h1 {
     white-space: nowrap;
 }
 
-.label.major {
-    font-weight: bold;
-    color: #fff;
-}
-
-.label.north {
-    color: #f44;
-}
+.label.major { font-weight: bold; color: #fff; }
+.label.north { color: #f44; }
 
 .needle {
     position: absolute;
@@ -90,20 +78,12 @@ h1 {
     top: 20px;
     left: 50%;
     transform: translateX(-50%);
-    transform-origin: bottom center;
     border-radius: 2px;
     z-index: 5;
 }
 
-.readout {
-    font-size: 1.4rem;
-    margin-top: 4px;
-}
-
-.degrees {
-    font-size: 1.1rem;
-    opacity: 0.8;
-}
+.readout { font-size: 1.4rem; }
+.degrees { font-size: 1.1rem; opacity: 0.8; }
 
 button {
     margin-top: 14px;
@@ -113,7 +93,6 @@ button {
     border-radius: 6px;
     background: #2d7cff;
     color: #fff;
-    cursor: pointer;
 }
 
 .status {
@@ -144,6 +123,10 @@ button {
 let currentHeading = 0;
 let calibrationOffset = 0;
 
+// NEW: tracking smooth rotation
+let lastAngle = 0;
+let smoothAngle = 0;
+
 const rose = document.getElementById("rose");
 const directionEl = document.getElementById("direction");
 const degreesEl = document.getElementById("degrees");
@@ -155,7 +138,6 @@ function getDirection(deg) {
 }
 
 function buildCompassRose() {
-    // Tick marks every 5°
     for (let d = 0; d < 360; d += 5) {
         const tick = document.createElement("div");
         tick.className = "tick " + (d % 30 === 0 ? "major" : "minor");
@@ -163,15 +145,14 @@ function buildCompassRose() {
         rose.appendChild(tick);
     }
 
-    // Cardinal / intercardinal labels
     const labels = [
-        { d: 0,   t: "N",  c: "major north" },
-        { d: 45,  t: "NE" },
-        { d: 90,  t: "E",  c: "major" },
+        { d: 0, t: "N", c: "major north" },
+        { d: 45, t: "NE" },
+        { d: 90, t: "E", c: "major" },
         { d: 135, t: "SE" },
-        { d: 180, t: "S",  c: "major" },
+        { d: 180, t: "S", c: "major" },
         { d: 225, t: "SW" },
-        { d: 270, t: "W",  c: "major" },
+        { d: 270, t: "W", c: "major" },
         { d: 315, t: "NW" }
     ];
 
@@ -187,8 +168,15 @@ function buildCompassRose() {
 function updateCompass(heading) {
     const adjusted = (heading + calibrationOffset + 360) % 360;
 
-    // Rotate rose only — needle stays upright
-    rose.style.transform = `rotate(${-adjusted}deg)`;
+    // delta normalized to -180..180
+    let delta = adjusted - lastAngle;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+
+    smoothAngle += delta;
+    lastAngle = adjusted;
+
+    rose.style.transform = `rotate(${-smoothAngle}deg)`;
 
     directionEl.textContent = getDirection(adjusted);
     degreesEl.textContent = `${Math.round(adjusted)}°`;
@@ -210,8 +198,8 @@ function handleOrientation(e) {
 
 async function initSensors() {
     if (typeof DeviceOrientationEvent?.requestPermission === "function") {
-        const permission = await DeviceOrientationEvent.requestPermission();
-        if (permission === "granted") {
+        const p = await DeviceOrientationEvent.requestPermission();
+        if (p === "granted") {
             window.addEventListener("deviceorientation", handleOrientation, true);
             statusEl.textContent = "Permission granted";
         } else {
@@ -226,6 +214,8 @@ async function initSensors() {
 
 document.getElementById("calibrate").onclick = () => {
     calibrationOffset = -currentHeading;
+    lastAngle = 0;
+    smoothAngle = 0;
 };
 
 buildCompassRose();
